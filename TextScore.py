@@ -6,22 +6,13 @@ from Tokenizers import tokenize_sentence
 
 
 def edit_distance(word_a, word_b):
-    length_a = len(word_a)
-    length_b = len(word_b)
-
-    # this approach assumes the length of a <= length of b
-
-    list_a = list(word_a)
-    list_b = list(word_b)
-
-    if length_b < length_a:
-        list_a, length_a = list(word_b), len(word_b)
-        list_b, length_b = list(word_a), len(word_a)
+    list_a, list_b = _shortest_first(list(word_a), list(word_b))
+    length_a = len(list_a)
 
     position_a = 0
     edit_count = 0
 
-    while position_a < len(list_a):
+    while position_a < length_a:
         if list_a[position_a] != list_b[position_a]:
             if len(list_b) > length_a and list_a[position_a] == list_b[position_a + 1]:
                 edit_count = edit_count + 1
@@ -37,7 +28,7 @@ def edit_distance(word_a, word_b):
                     # going further may create an excessive amount of edits
                     match_index = find_first_match(list_a[position_a+1], position_a+1, list_b)
                     if match_index is not None:
-                        first_matching_pair_index = find_first_match2(position_a+1, list_a, list_b)
+                        first_matching_pair_index = find_first_matching_pair(position_a+1, list_a, list_b)
                         if first_matching_pair_index is None or first_matching_pair_index >= match_index:
                             list_b = list_b[:position_a + 1]+list_b[match_index:]
                             edit_count = edit_count + (match_index - (position_a + 1))
@@ -52,7 +43,7 @@ def edit_distance(word_a, word_b):
     return edit_count
 
 
-def edit_score(word_a, word_b):
+def edit_distance_score(word_a, word_b):
     distance = edit_distance(word_a, word_b)
     max_length = max(len(word_b), len(word_a))
 
@@ -67,7 +58,7 @@ def find_first_match(search_char, starting_position, char_list):
         return None
 
 
-def find_first_match2(starting_position, list_a, list_b):
+def find_first_matching_pair(starting_position, list_a, list_b):
     for i in range(starting_position, len(list_a)):
         for j in range(i, len(list_b)):
             if list_a[i] == list_b[j]:
@@ -76,78 +67,77 @@ def find_first_match2(starting_position, list_a, list_b):
     return None
 
 
-def sentence_score(sentence_a, sentence_b):
-    words_a = tokenize_words(sentence_a)
-    words_b = tokenize_words(sentence_b)
+def generic_score(tokenized_a, tokenized_b, edit_distance_function):
+    """ Given two tokenized set of elements, try to match up the tokens by the best edit distance (in order). The total
+    of those distances are then used in conjunction with edit distance of the two lists to calculate a total score. The
+    use of both scores is an attempt to minimize smaller differences such a punctuation etc.
+    """
+    tokens_a, tokens_b = _shortest_first(tokenized_a, tokenized_b)
 
-    if len(words_b) < len(words_a):
-        words_a = tokenize_words(sentence_b)
-        words_b = tokenize_words(sentence_a)
+    token_to_scores_dict = _find_best_score(edit_distance_function, tokens_a, tokens_b)
 
-    word_to_scores_dict = {}
+    total_score, total_max_score = _calculate_total_scores(token_to_scores_dict)
 
-    for i, word_a in enumerate(words_a):
-        scores = []
-        for j, word_b in enumerate(words_b):
-            if j >= i:
-                scores.append((i, j, edit_score(word_a, word_b)))
-        best_score = sorted(scores, key=lambda x: x[2].edit_distance).pop(0)
-        word_to_scores_dict.update({i: best_score})
-
-    total_max_score = 0
-    total_score = 0
-    for k, v in word_to_scores_dict.items():
-        total_score = total_score + v[2].edit_distance
-        total_max_score = total_max_score + v[2].max_score
-        word_b_index = v[1]
-        word_a_index = v[0]
+    for k, v in token_to_scores_dict.items():
+        token_b_index = v[1]
+        token_a_index = v[0]
         if v[2].edit_distance != v[2].max_score:
-            # if the match is less then max (meaning no match), swap in the word this will
+            # if the match is less then max (meaning no match): swap in the token, this will
             # get around small changes with words or punctuation
-            words_b[word_b_index] = words_a[word_a_index]
+            tokens_b[token_b_index] = tokens_a[token_a_index]
 
-    sentence_edit_score = edit_score(words_a, words_b)
-
+    sentence_edit_score = edit_distance_score(tokens_a, tokens_b)
     total_score = total_score + sentence_edit_score.edit_distance
     total_max_score = total_max_score + sentence_edit_score.max_score
 
     return DistanceScore(total_score, total_max_score)
+
+
+def sentence_score(sentence_a, sentence_b):
+    return generic_score(
+        tokenize_words(sentence_a),
+        tokenize_words(sentence_b),
+        lambda a, b: edit_distance_score(a, b)
+    )
 
 
 def text_score(text_a, text_b):
+    return generic_score(
+        [inspect.cleandoc(y) for y in tokenize_sentence(text_a) if len(y) > 0],
+        [inspect.cleandoc(x) for x in tokenize_sentence(text_b) if len(x) > 0],
+        lambda a, b: sentence_score(a, b)
+    )
 
-    sentences_a = [inspect.cleandoc(y) for y in tokenize_sentence(text_a) if len(y) > 0]
-    sentences_b = [inspect.cleandoc(x) for x in tokenize_sentence(text_b) if len(x) > 0]
 
-    if len(sentences_b) < len(sentences_a):
-        sentences_a = [inspect.cleandoc(x) for x in tokenize_sentence(text_b) if len(x) > 0]
-        sentences_b = [inspect.cleandoc(y) for y in tokenize_sentence(text_a) if len(y) > 0]
-
+def _find_best_score(edit_distance_function, list_a, list_b):
     word_to_scores_dict = {}
 
-    for i, word_a in enumerate(sentences_a):
+    for i, word_a in enumerate(list_a):
         scores = []
-        for j, word_b in enumerate(sentences_b):
+        for j, word_b in enumerate(list_b):
             if j >= i:
-                scores.append((i, j, sentence_score(word_a, word_b)))
+                scores.append((i, j, edit_distance_function(word_a, word_b)))
         best_score = sorted(scores, key=lambda x: x[2].edit_distance).pop(0)
         word_to_scores_dict.update({i: best_score})
 
+    return word_to_scores_dict
+
+
+def _shortest_first(list_a, list_b):
+    length_a = len(list_a)
+    length_b = len(list_b)
+
+    if length_b < length_a:
+        return list_b, list_a
+    else:
+        return list_a, list_b
+
+
+def _calculate_total_scores(element_to_scores_dict):
     total_max_score = 0
     total_score = 0
-    for k, v in word_to_scores_dict.items():
+    for k, v in element_to_scores_dict.items():
         total_score = total_score + v[2].edit_distance
         total_max_score = total_max_score + v[2].max_score
-        word_b_index = v[1]
-        word_a_index = v[0]
-        if v[2].edit_distance != v[2].max_score:
-            # if the match is less then max (meaning no match), swap in the word this will
-            # get around small changes with words or punctuation
-            sentences_a[word_b_index] = sentences_b[word_a_index]
 
-    sentence_edit_score = edit_score(sentences_a, sentences_b)
-
-    total_score = total_score + sentence_edit_score.edit_distance
-    total_max_score = total_max_score + sentence_edit_score.max_score
-
-    return DistanceScore(total_score, total_max_score)
+    return total_score, total_max_score
