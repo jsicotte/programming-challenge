@@ -6,6 +6,9 @@ from Tokenizers import tokenize_sentence
 
 
 def edit_distance(word_a, word_b):
+    """ Calculate the edit distance between two lists. As long as the elements in the list can be compared this
+    function will produce an edit distance
+    """
     list_a, list_b = _shortest_first(list(word_a), list(word_b))
     length_a = len(list_a)
 
@@ -15,15 +18,13 @@ def edit_distance(word_a, word_b):
     while position_a < length_a:
         if list_a[position_a] != list_b[position_a]:
             if len(list_b) > length_a and list_a[position_a] == list_b[position_a + 1]:
-                edit_count = edit_count + 1
                 position_a = position_a + 1
                 list_b = list_b[:position_a] + list_b[position_a + 1:]
             else:
-                edit_count = edit_count + 1
                 list_b[position_a] = list_a[position_a]
 
                 if position_a != len(list_a) - 1:
-                    # minimize edits delete elements from b until a matches b at some point. If there are no matches
+                    # minimize edits by using a delete from b until a matches b at some point. If there are no matches
                     # then that means the rest of the edits will be substitutions. Only delete up to the first match,
                     # going further may create an excessive amount of edits
                     match_index = find_first_match(list_a[position_a+1], position_a+1, list_b)
@@ -34,6 +35,7 @@ def edit_distance(word_a, word_b):
                             edit_count = edit_count + (match_index - (position_a + 1))
 
                 position_a = position_a + 1
+            edit_count = edit_count + 1
         else:
             position_a = position_a + 1
 
