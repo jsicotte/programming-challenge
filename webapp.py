@@ -1,6 +1,5 @@
 from flask import Flask
 from flask import request
-from Scores import DistanceScore
 from TextScore import text_score
 app = Flask(__name__)
 
@@ -17,7 +16,5 @@ def hello():
             "score": f"{distance_score.percentage_score()}"
         }
     }
-    return DistanceScore(1,2)
-
 if __name__ == '__main__':
     app.run()
