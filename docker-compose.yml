@@ -1,0 +1,9 @@
+version: "3.7"
+services:
+  text-score:
+    build: ./
+    ports:
+      - 5000:5000
+    environment:
+      - FLASK_APP=webapp.py
+    command: flask run -h 0.0.0.0
