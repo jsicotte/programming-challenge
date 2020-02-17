@@ -15,8 +15,8 @@ def edit_distance(word_a, word_b):
     list_b = list(word_b)
 
     if length_b < length_a:
-        list_a = list(word_b)
-        list_b = list(word_a)
+        list_a, length_a = list(word_b), len(word_b)
+        list_b, length_b = list(word_a), len(word_a)
 
     position_a = 0
     edit_count = 0
@@ -32,9 +32,9 @@ def edit_distance(word_a, word_b):
                 list_b[position_a] = list_a[position_a]
 
                 if position_a != len(list_a) - 1:
-                    # minimize edits delete elements from b until a matches b at some point. If there are no matches then
-                    # that means the rest of the edits will be substitutions. Only delete up to the first match, going
-                    # further may create an excessive amount of edits
+                    # minimize edits delete elements from b until a matches b at some point. If there are no matches
+                    # then that means the rest of the edits will be substitutions. Only delete up to the first match,
+                    # going further may create an excessive amount of edits
                     match_index = find_first_match(list_a[position_a+1], position_a+1, list_b)
                     if match_index is not None:
                         first_matching_pair_index = find_first_match2(position_a+1, list_a, list_b)
@@ -57,11 +57,6 @@ def edit_score(word_a, word_b):
     max_length = max(len(word_b), len(word_a))
 
     return DistanceScore(distance, max_length)
-
-    # if distance == 0:
-    #     return 1
-    # else:
-    #     return 1 - (distance / max_length)
 
 
 def find_first_match(search_char, starting_position, char_list):
